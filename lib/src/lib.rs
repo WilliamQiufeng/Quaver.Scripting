@@ -29,7 +29,7 @@ impl Rectangle {
 
     // Constructor via `__call` metamethod
     #[lua(meta, infallible)]
-    fn __call(length: u32, width: u32) -> Self {
+    fn __call(_lua: &Lua, _proxy: mlua::AnyUserData, length: u32, width: u32) -> Self {
         Rectangle::new(length, width)
     }
 }
@@ -45,7 +45,7 @@ pub fn test() -> Result<()> {
         assert(rect.NAME == "Rectangle")
         assert(rect.area == 150)
         assert(math.floor(rect:diagonal()) == 18)
-        print(rect.area)
+        print(rect)
     })
     .exec()
 }

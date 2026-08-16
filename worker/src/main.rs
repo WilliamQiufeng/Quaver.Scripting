@@ -11,7 +11,7 @@ pub fn apply_sandbox() -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     apply_sandbox()?;
-    _ = lib::test();
+    lib::test()?;
     println!("Hello, world!");
     Ok(())
 }
