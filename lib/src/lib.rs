@@ -1,5 +1,8 @@
 use mlua::{Lua, Result, UserData, chunk};
 
+#[cfg(target_os = "linux")]
+pub mod linux;
+
 #[derive(Default, UserData)]
 struct Rectangle {
     length: u32,
@@ -33,7 +36,8 @@ impl Rectangle {
 
 pub fn test() -> Result<()> {
     let lua = Lua::new();
-    lua.globals().set("Rectangle", lua.create_proxy::<Rectangle>()?)?;
+    lua.globals()
+        .set("Rectangle", lua.create_proxy::<Rectangle>()?)?;
     lua.load(chunk! {
         local rect = Rectangle(10, 5)
         rect.width = rect.width + 5
@@ -41,6 +45,8 @@ pub fn test() -> Result<()> {
         assert(rect.NAME == "Rectangle")
         assert(rect.area == 150)
         assert(math.floor(rect:diagonal()) == 18)
+        print(rect.area)
     })
     .exec()
 }
+

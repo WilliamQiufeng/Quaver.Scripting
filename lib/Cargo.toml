@@ -4,4 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.104"
 mlua = { version = "0.12.0", features = ["luajit", "vendored", "macros", "userdata-wrappers", "send", "serde"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+landlock = "0.4.7"
+libc = "0.2.189"
+seccompiler = "0.5.0"
