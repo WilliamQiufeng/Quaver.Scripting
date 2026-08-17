@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+memmap2 = "0.9.11"
 mlua = { version = "0.12.0", features = ["luajit", "vendored", "macros", "userdata-wrappers", "send", "serde"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
