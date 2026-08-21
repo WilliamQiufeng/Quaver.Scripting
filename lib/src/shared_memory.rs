@@ -38,7 +38,7 @@ struct SharedMemoryChannel<D: ChannelDirection> {
 
 impl<D: ChannelDirection> SharedMemoryChannel<D> {
     fn find_buffer<'a>(&'a self, buffer: &'a [u8], channel_size: usize) -> Option<&'a [u8]> {
-        let offset = self.offset.load(Ordering::Relaxed) as usize;
+        let offset = usize::try_from(self.offset.load(Ordering::Relaxed)).ok()?;
         offset
             .checked_add(channel_size)
             .and_then(|end| buffer.get(offset..end))
@@ -48,7 +48,7 @@ impl<D: ChannelDirection> SharedMemoryChannel<D> {
         buffer: &'a mut [u8],
         channel_size: usize,
     ) -> Option<&'a mut [u8]> {
-        let offset = self.offset.load(Ordering::Relaxed) as usize;
+        let offset = usize::try_from(self.offset.load(Ordering::Relaxed)).ok()?;
         offset
             .checked_add(channel_size)
             .and_then(|end| buffer.get_mut(offset..end))
@@ -160,9 +160,15 @@ impl std::io::Read for SharedMemoryInstance {
 impl std::io::Write for SharedMemoryInstance {
     fn write(&mut self, input: &[u8]) -> std::io::Result<usize> {
         let (layout, payload) = self.layout_payload_mut();
+        let channel_size = usize::try_from(layout.channel_size).or_else(|e| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Channel size error: {e}"),
+            ))
+        })?;
         let buf = layout
             .worker_to_host
-            .find_buffer_mut(payload, layout.channel_size as usize)
+            .find_buffer_mut(payload, channel_size)
             .ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer")
             })?;
