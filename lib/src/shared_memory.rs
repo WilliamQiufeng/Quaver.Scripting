@@ -3,7 +3,7 @@ use std::{
     fs::File,
     marker::PhantomData,
     mem::{align_of, size_of},
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use memmap2::{MmapMut, MmapOptions};
@@ -12,6 +12,7 @@ use memmap2::{MmapMut, MmapOptions};
 struct SharedMemoryLayout {
     magic: u32,
     version: u32,
+    channel_size: usize,
 
     host_to_worker: SharedMemoryChannel<HostToWorker>,
     worker_to_host: SharedMemoryChannel<WorkerToHost>,
@@ -29,20 +30,28 @@ impl ChannelDirection for WorkerToHost {}
 
 #[repr(C)]
 struct SharedMemoryChannel<D: ChannelDirection> {
-    offset: AtomicUsize,
-    write: AtomicUsize,
-    read: AtomicUsize,
+    offset: AtomicU64,
+    write: AtomicU64,
+    read: AtomicU64,
     _phantom: PhantomData<D>,
 }
 
 impl<D: ChannelDirection> SharedMemoryChannel<D> {
-    fn find_buffer<'a>(&'a self, buffer: &'a [u8]) -> Option<&'a [u8]> {
-        let offset = self.offset.load(Ordering::Relaxed);
-        buffer.get(offset..)
+    fn find_buffer<'a>(&'a self, buffer: &'a [u8], channel_size: usize) -> Option<&'a [u8]> {
+        let offset = self.offset.load(Ordering::Relaxed) as usize;
+        offset
+            .checked_add(channel_size)
+            .and_then(|end| buffer.get(offset..end))
     }
-    fn find_buffer_mut<'a>(&'a self, buffer: &'a mut [u8]) -> Option<&'a mut [u8]> {
-        let offset = self.offset.load(Ordering::Relaxed);
-        buffer.get_mut(offset..)
+    fn find_buffer_mut<'a>(
+        &'a self,
+        buffer: &'a mut [u8],
+        channel_size: usize,
+    ) -> Option<&'a mut [u8]> {
+        let offset = self.offset.load(Ordering::Relaxed) as usize;
+        offset
+            .checked_add(channel_size)
+            .and_then(|end| buffer.get_mut(offset..end))
     }
 }
 
@@ -52,13 +61,14 @@ impl SharedMemoryChannel<HostToWorker> {
             return Ok(0);
         }
 
-        let write_pos = self.write.load(Ordering::Acquire);
-        let read_pos = self.read.load(Ordering::Relaxed);
+        let write_pos = self.write.load(Ordering::Acquire) as usize;
+        let read_pos = self.read.load(Ordering::Relaxed) as usize;
         let available = (write_pos.saturating_sub(read_pos)).min(buffer.len());
         let count = cmp::min(available, output.len());
 
         copy_from_ring(output, buffer, read_pos % buffer.len(), count);
-        self.read.store(read_pos + count, Ordering::Release);
+        self.read
+            .store((read_pos + count) as u64, Ordering::Release);
 
         Ok(count)
     }
@@ -70,14 +80,15 @@ impl SharedMemoryChannel<WorkerToHost> {
             return Ok(0);
         }
 
-        let write_pos = self.write.load(Ordering::Relaxed);
-        let read_pos = self.read.load(Ordering::Acquire);
+        let write_pos = self.write.load(Ordering::Relaxed) as usize;
+        let read_pos = self.read.load(Ordering::Acquire) as usize;
         let used = (write_pos.saturating_sub(read_pos)).min(buffer.len());
         let available = buffer.len() - used;
         let count = cmp::min(available, input.len());
 
         copy_to_ring(buffer, write_pos % buffer.len(), &input[..count]);
-        self.write.store(write_pos + count, Ordering::Release);
+        self.write
+            .store((write_pos + count) as u64, Ordering::Release);
 
         Ok(count)
     }
@@ -92,7 +103,7 @@ impl SharedMemoryInstance {
     }
 
     pub fn from_file(file: &File, size: usize) -> std::io::Result<Self> {
-        assert!(size >= size_of::<SharedMemoryLayout>());
+        assert!(size > size_of::<SharedMemoryLayout>());
         let mmap = open(file, size)?;
         Ok(Self { mmap })
     }
@@ -119,7 +130,7 @@ impl std::io::Read for SharedMemoryInstance {
         let layout = self.layout();
         let buf = layout
             .host_to_worker
-            .find_buffer(self.payload())
+            .find_buffer(self.payload(), layout.channel_size)
             .ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer")
             })?;
@@ -132,13 +143,13 @@ impl std::io::Write for SharedMemoryInstance {
         let (layout, payload) = self.layout_payload_mut();
         let buf = layout
             .worker_to_host
-            .find_buffer_mut(payload)
+            .find_buffer_mut(payload, layout.channel_size)
             .ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer")
             })?;
         layout.worker_to_host.write_ring(buf, input)
     }
-    
+
     fn flush(&mut self) -> std::io::Result<()> {
         Ok(())
     }

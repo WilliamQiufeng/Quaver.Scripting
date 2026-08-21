@@ -1,4 +1,4 @@
-use std::{env::args, fs::File};
+use std::{env::args, fs::{File, OpenOptions}};
 
 use anyhow::bail;
 use lib::shared_memory;
@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
     }
     let path = &args[1];
     let size = usize::from_str_radix(&args[2], 10)?;
-    let file = File::open(path)?;
+    let file = OpenOptions::new().read(true).write(true).open(path)?;
 
     let mut mem = shared_memory::SharedMemoryInstance::from_file(&file, size)?;
 
