@@ -12,7 +12,7 @@ use memmap2::{MmapMut, MmapOptions};
 struct SharedMemoryLayout {
     magic: u32,
     version: u32,
-    channel_size: usize,
+    channel_size: u64,
 
     host_to_worker: SharedMemoryChannel<HostToWorker>,
     worker_to_host: SharedMemoryChannel<WorkerToHost>,
@@ -95,6 +95,13 @@ impl SharedMemoryChannel<WorkerToHost> {
 }
 
 impl SharedMemoryInstance {
+    const MAGIC: u32 = 0x95abe799;
+    const VERSION: u32 = 1;
+
+    fn verify(&self) -> bool {
+        self.layout().magic == Self::MAGIC && self.layout().version == Self::VERSION
+    }
+
     fn layout(&self) -> &SharedMemoryLayout {
         assert!(self.mmap.len() >= size_of::<SharedMemoryLayout>());
         let ptr = self.mmap.as_ptr();
@@ -105,7 +112,19 @@ impl SharedMemoryInstance {
     pub fn from_file(file: &File, size: usize) -> std::io::Result<Self> {
         assert!(size > size_of::<SharedMemoryLayout>());
         let mmap = open(file, size)?;
-        Ok(Self { mmap })
+        let res = Self { mmap };
+        if res.verify() {
+            Ok(res)
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "Unsupported layout: magic = {:#08x}, version = {:#08x}",
+                    res.layout().magic,
+                    res.layout().version
+                ),
+            ))
+        }
     }
 
     fn layout_payload_mut(&mut self) -> (&SharedMemoryLayout, &mut [u8]) {
@@ -130,7 +149,7 @@ impl std::io::Read for SharedMemoryInstance {
         let layout = self.layout();
         let buf = layout
             .host_to_worker
-            .find_buffer(self.payload(), layout.channel_size)
+            .find_buffer(self.payload(), layout.channel_size as usize)
             .ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer")
             })?;
@@ -143,7 +162,7 @@ impl std::io::Write for SharedMemoryInstance {
         let (layout, payload) = self.layout_payload_mut();
         let buf = layout
             .worker_to_host
-            .find_buffer_mut(payload, layout.channel_size)
+            .find_buffer_mut(payload, layout.channel_size as usize)
             .ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer")
             })?;

@@ -1,4 +1,4 @@
-use std::{env::args, fs::{File, OpenOptions}};
+use std::{env::args, fs::OpenOptions};
 
 use anyhow::bail;
 use lib::shared_memory;
