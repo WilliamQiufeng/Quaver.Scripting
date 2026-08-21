@@ -1,4 +1,4 @@
-use std::{env::args, fs::OpenOptions};
+use std::{env::args, thread::sleep, time::Duration};
 
 use anyhow::bail;
 use lib::shared_memory;
@@ -21,13 +21,14 @@ fn main() -> anyhow::Result<()> {
     }
     let path = &args[1];
     let size = usize::from_str_radix(&args[2], 10)?;
-    let file = OpenOptions::new().read(true).write(true).open(path)?;
 
-    let mut mem = shared_memory::SharedMemoryInstance::from_file(&file, size)?;
+    let mut mem = shared_memory::SharedMemoryInstance::from_file(path, size)?;
 
     apply_sandbox()?;
     lib::test()?;
-    writeln!(mem, "Hi")?;
     println!("Hello, world!");
-    Ok(())
+    loop {
+        writeln!(mem, "Hi")?;
+        sleep(Duration::from_secs(1));
+    }
 }

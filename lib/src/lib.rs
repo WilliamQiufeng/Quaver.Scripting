@@ -1,15 +1,14 @@
 use mlua::{Lua, Result, UserData, chunk};
 
-pub mod shared_memory;
 #[cfg(target_os = "linux")]
 pub mod linux;
+pub mod shared_memory;
 
 #[derive(Default, UserData)]
 struct Rectangle {
     length: u32,
     width: u32,
 }
-
 
 #[mlua::userdata_impl]
 impl Rectangle {
