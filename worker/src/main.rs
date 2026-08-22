@@ -22,7 +22,7 @@ fn main() -> anyhow::Result<()> {
     let path = &args[1];
     let size = usize::from_str_radix(&args[2], 10)?;
 
-    let mut mem = shared_memory::SharedMemoryInstance::from_file(path, size)?;
+    let mut mem = shared_memory::duplex::DuplexInstance::from_file(path, size)?;
 
     apply_sandbox()?;
     lib::test()?;
