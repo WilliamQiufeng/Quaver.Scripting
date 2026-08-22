@@ -5,8 +5,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use memmap2::{MmapMut, MmapOptions};
-
 pub mod os;
 
 #[repr(C)]
@@ -20,7 +18,7 @@ struct SharedMemoryLayout {
 }
 
 pub struct SharedMemoryInstance {
-    mmap: MmapMut,
+    mmap: os::MappedMemory,
 }
 
 trait ChannelDirection {}
@@ -149,9 +147,15 @@ impl SharedMemoryInstance {
 impl std::io::Read for SharedMemoryInstance {
     fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
         let layout = self.layout();
+        let channel_size = usize::try_from(layout.channel_size).or_else(|e| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Channel size error: {e}"),
+            ))
+        })?;
         let buf = layout
             .host_to_worker
-            .find_buffer(self.payload(), layout.channel_size as usize)
+            .find_buffer(self.payload(), channel_size)
             .ok_or_else(|| {
                 std::io::Error::new(std::io::ErrorKind::InvalidData, "Invalid buffer")
             })?;
