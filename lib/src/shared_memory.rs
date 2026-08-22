@@ -1,3 +1,2 @@
-pub mod os;
 pub mod duplex;
-
+pub mod os;

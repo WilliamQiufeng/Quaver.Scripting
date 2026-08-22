@@ -1,7 +1,10 @@
-use std::{cmp, marker::PhantomData, sync::atomic::{AtomicU64, Ordering}};
+use std::{
+    cmp,
+    marker::PhantomData,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use crate::shared_memory::os::MappedMemoryMut;
-
 
 #[repr(C)]
 struct DuplexLayout {
