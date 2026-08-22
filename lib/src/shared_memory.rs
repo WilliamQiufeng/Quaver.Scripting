@@ -18,7 +18,7 @@ struct SharedMemoryLayout {
 }
 
 pub struct SharedMemoryInstance {
-    mmap: os::MappedMemory,
+    mmap: os::MappedMemoryMut,
 }
 
 trait ChannelDirection {}
@@ -111,7 +111,7 @@ impl SharedMemoryInstance {
     pub fn from_file(path: &str, size: usize) -> std::io::Result<Self> {
         assert!(size > size_of::<SharedMemoryLayout>());
 
-        let mmap = os::open(path, size)?;
+        let mmap = os::open_mut(path, size)?;
         let res = Self { mmap };
         if res.verify() {
             Ok(res)
